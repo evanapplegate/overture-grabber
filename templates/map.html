@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OSM Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <style>
+        #map { height: 600px; }
+    </style>
+</head>
+<body>
+    <h1>Zoom to your area, click the rectangle, and drag a box to download your selected feature.</h1>
+    <select id="featureType">
+        <option value="locality">locality</option>
+        <option value="locality_area">locality_area</option>
+        <option value="administrative_boundary">administrative_boundary</option>
+        <option value="building">building</option>
+        <option value="building_part">building_part</option>
+        <option value="division">division</option>
+        <option value="division_area">division_area</option>
+        <option value="place">place</option>
+        <option value="segment">segment</option>
+        <option value="connector">connector</option>
+        <option value="infrastructure">infrastructure</option>
+        <option value="land">land</option>
+        <option value="land_cover">land_cover</option>
+        <option value="land_use">land_use</option>
+        <option value="water">water</option>
+    </select>
+    <div id="map"></div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var map = L.map('map').setView([34.505, -119], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+            }).addTo(map);
+        
+            var drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+        
+            var drawControl = new L.Control.Draw({
+                edit: {
+                    featureGroup: drawnItems
+                },
+                draw: {
+                    polygon: false,
+                    polyline: false,
+                    circle: false,
+                    circlemarker: false,
+                    marker: false,
+                    rectangle: true
+                }
+            });
+            map.addControl(drawControl);
+        
+            map.on(L.Draw.Event.CREATED, function(event) {
+                var layer = event.layer;
+                drawnItems.addLayer(layer);
+                if (event.layerType === 'rectangle') {
+                    var bounds = layer.getBounds();
+                    var bbox = [bounds.getSouthWest().lng, bounds.getSouthWest().lat, bounds.getNorthEast().lng, bounds.getNorthEast().lat];
+        
+                    // Prepare the payload with bbox and type
+                    var payload = JSON.stringify({
+                        bbox: bbox,
+                        type: document.getElementById('featureType').value
+                    });
+                    console.log(payload); // Debugging line to check the payload
+        
+                    // Add an h1 element dynamically
+                    var messageElement = document.createElement('h1');
+                    messageElement.textContent = "Sit tight, grabbing your features in a .geojson....";
+                    document.body.appendChild(messageElement);
+        
+                    // Send the AJAX request to the Flask backend
+                    fetch('/download_geojson', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: payload
+                    })
+                    .then(response => {
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        return response.blob();
+                    })
+                    .then(blob => {
+                        var url = window.URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = "downloaded_file.geojson"; // Or use the server-suggested filename
+                        document.body.appendChild(a); // Required for Firefox
+                        a.click();
+                        a.remove();
+                        // Optionally, remove the message or update it
+                        document.body.removeChild(messageElement);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        messageElement.textContent = "Error: Could not grab your features."; // Update message on error
+                    });
+                }
+            });
+        });
+        </script>
+</body>
+</html>
