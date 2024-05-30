@@ -1,1 +1,1 @@
-web: python overture_grabber.py
+web: gunicorn -t 120 overture_grabber:app --worker-class gevent
