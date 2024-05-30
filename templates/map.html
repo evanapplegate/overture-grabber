@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>OSM Map</title>
+    <title>Overture data grabber</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
@@ -22,7 +22,7 @@
     </style>
 </head>
 <body>
-    <h1>Zoom to your area, click the rectangle, drag a box to get your selected feature type. It'll take at least ~20 seconds to build your geojsons.</h1>
+    <h1>Zoom to your area, click the rectangle, drag a box to grab your selected feature type from the Overture Maps dataset. It'll take at least ~20 seconds to build your geojsons.</h1>
     <div id="featureType">
         <input type="checkbox" id="locality" value="locality"><label for="locality">locality</label><br>
         <input type="checkbox" id="locality_area" value="locality_area"><label for="locality_area">locality_area</label><br>
