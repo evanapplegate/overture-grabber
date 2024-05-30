@@ -1,6 +1,5 @@
-from flask import Flask, request, send_file, render_template, jsonify
+from flask import Flask, request, Response, render_template, jsonify
 import subprocess
-import tempfile
 import os
 
 app = Flask(__name__)
@@ -12,26 +11,30 @@ def index():
 @app.route('/download_geojson', methods=['POST'])
 def download_geojson():
     bbox = request.json.get('bbox')
-    feature_type = request.json.get('type', 'place')  # Use the type from the request, default to 'place'
+    feature_type = request.json.get('type', 'place')  # Default to 'place' if type not specified
     
     if not bbox or len(bbox) != 4 or not feature_type:
         return {"error": "Invalid input"}, 400
-    
-    output_file = tempfile.NamedTemporaryFile(delete=False, suffix='.geojson').name
+
+    # Prepare the command to write output to stdout
     command = [
         'overturemaps', 'download',
         '--bbox', ','.join(map(str, bbox)),
         '-f', 'geojson',
         '--type', feature_type,
-        '-o', output_file
     ]
-    
-    try:
-        subprocess.run(command, check=True)
-        return send_file(output_file, as_attachment=True, download_name=f'{feature_type}.geojson')
-    except subprocess.CalledProcessError:
-        os.unlink(output_file)  # Clean up temporary file
-        return {"error": "Failed to download geojson"}, 500
+
+    # Stream the output of the command directly as a response
+    def generate():
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for line in iter(process.stdout.readline, ''):
+            yield line
+        process.stdout.close()
+        return_code = process.wait()
+        if return_code:
+            raise subprocess.CalledProcessError(return_code, command)
+
+    return Response(generate(), mimetype="application/geo+json")
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))

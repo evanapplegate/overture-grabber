@@ -8,27 +8,38 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <style>
         #map { height: 600px; }
+        #featureType {
+            display: flex;
+            flex-wrap: wrap; /* Allows items to wrap to the next line if the container's width is exceeded */
+            align-items: center; /* Aligns items vertically */
+        }
+        #featureType label {
+            margin-right: 10px; /* Adds some space between the checkbox-label pairs */
+        }
+        #featureType input[type="checkbox"] {
+            margin-right: 5px; /* Adds some space between the checkbox and its label */
+        }
     </style>
 </head>
 <body>
-    <h1>Zoom to your area, click the rectangle, and drag a box to download your selected feature.</h1>
-    <select id="featureType">
-        <option value="locality">locality</option>
-        <option value="locality_area">locality_area</option>
-        <option value="administrative_boundary">administrative_boundary</option>
-        <option value="building">building</option>
-        <option value="building_part">building_part</option>
-        <option value="division">division</option>
-        <option value="division_area">division_area</option>
-        <option value="place">place</option>
-        <option value="segment">segment</option>
-        <option value="connector">connector</option>
-        <option value="infrastructure">infrastructure</option>
-        <option value="land">land</option>
-        <option value="land_cover">land_cover</option>
-        <option value="land_use">land_use</option>
-        <option value="water">water</option>
-    </select>
+    <h1>Zoom to your area, click the rectangle, drag a box to get your selected feature type. It'll take at least ~20 seconds to build your geojsons.</h1>
+    <div id="featureType">
+        <input type="checkbox" id="locality" value="locality"><label for="locality">locality</label><br>
+        <input type="checkbox" id="locality_area" value="locality_area"><label for="locality_area">locality_area</label><br>
+        <input type="checkbox" id="administrative_boundary" value="administrative_boundary"><label for="administrative_boundary">administrative_boundary</label><br>
+        <input type="checkbox" id="building" value="building"><label for="building">building</label><br>
+        <input type="checkbox" id="building_part" value="building_part"><label for="building_part">building_part</label><br>
+        <input type="checkbox" id="division" value="division"><label for="division">division</label><br>
+        <input type="checkbox" id="division_area" value="division_area"><label for="division_area">division_area</label><br>
+        <input type="checkbox" id="place" value="place"><label for="place">place</label><br>
+        <input type="checkbox" id="segment" value="segment"><label for="segment">segment</label><br>
+        <input type="checkbox" id="connector" value="connector"><label for="connector">connector</label><br>
+        <input type="checkbox" id="infrastructure" value="infrastructure"><label for="infrastructure">infrastructure</label><br>
+        <input type="checkbox" id="land" value="land"><label for="land">land</label><br>
+        <input type="checkbox" id="land_cover" value="land_cover"><label for="land_cover">land_cover</label><br>
+        <input type="checkbox" id="land_use" value="land_use"><label for="land_use">land_use</label><br>
+        <input type="checkbox" id="water" value="water"><label for="water">water</label><br>
+    </div>
     <div id="map"></div>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -61,46 +72,58 @@
                 if (event.layerType === 'rectangle') {
                     var bounds = layer.getBounds();
                     var bbox = [bounds.getSouthWest().lng, bounds.getSouthWest().lat, bounds.getNorthEast().lng, bounds.getNorthEast().lat];
-        
-                    // Prepare the payload with bbox and type
-                    var payload = JSON.stringify({
-                        bbox: bbox,
-                        type: document.getElementById('featureType').value
+                    
+                    // Collect all selected feature types
+                    var selectedFeatureTypes = [];
+                    document.querySelectorAll('#featureType input[type="checkbox"]:checked').forEach(function(checkbox) {
+                        selectedFeatureTypes.push(checkbox.value);
                     });
-                    console.log(payload); // Debugging line to check the payload
         
-                    // Add an h1 element dynamically
-                    var messageElement = document.createElement('h1');
-                    messageElement.textContent = "Sit tight, grabbing your features in a .geojson....";
-                    document.body.appendChild(messageElement);
+                    // Function to download next feature type
+                    function downloadNextFeatureType(index) {
+                        if (index >= selectedFeatureTypes.length) return; // Stop if no more feature types
+                        
+                        var featureType = selectedFeatureTypes[index];
+                        var messageElement = document.createElement('h1');
+                        messageElement.textContent = `Creating ${featureType}.geojson, sit tight....`;
+                        document.body.appendChild(messageElement);
+                        
+                        var payload = JSON.stringify({
+                            bbox: bbox,
+                            type: featureType
+                        });
         
-                    // Send the AJAX request to the Flask backend
-                    fetch('/download_geojson', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: payload
-                    })
-                    .then(response => {
-                        if (!response.ok) throw new Error('Network response was not ok');
-                        return response.blob();
-                    })
-                    .then(blob => {
-                        var url = window.URL.createObjectURL(blob);
-                        var a = document.createElement('a');
-                        a.href = url;
-                        a.download = "downloaded_file.geojson"; // Or use the server-suggested filename
-                        document.body.appendChild(a); // Required for Firefox
-                        a.click();
-                        a.remove();
-                        // Optionally, remove the message or update it
-                        document.body.removeChild(messageElement);
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        messageElement.textContent = "Error: Could not grab your features."; // Update message on error
-                    });
+                        fetch('/download_geojson', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: payload
+                        })
+                        .then(response => {
+                            if (!response.ok) throw new Error('Network response was not ok');
+                            return response.blob();
+                        })
+                        .then(blob => {
+                            var url = window.URL.createObjectURL(blob);
+                            var a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${featureType}.geojson`;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            document.body.removeChild(messageElement);
+                            downloadNextFeatureType(index + 1); // Download next feature type
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            messageElement.textContent = `Error: Could not grab ${featureType}.`; // Update message on error
+                            document.body.removeChild(messageElement);
+                            downloadNextFeatureType(index + 1); // Attempt next feature type
+                        });
+                    }
+        
+                    downloadNextFeatureType(0); // Start downloading the first selected feature type
                 }
             });
         });
