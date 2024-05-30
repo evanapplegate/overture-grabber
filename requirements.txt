@@ -20,7 +20,7 @@ et-xmlfile
 exceptiongroup
 Flask
 fonttools
-GDAL
+GDAL==3.9.0
 googlemaps==2.5.1
 greenlet
 h11
