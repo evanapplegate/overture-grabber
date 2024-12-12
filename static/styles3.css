@@ -1,0 +1,50 @@
+/* Getty Museum Inspired Style 3 */
+
+body {
+    font-family: 'Times New Roman', Times, serif;
+    color: #555;
+    background-color: #e0e0e0;
+    margin: 0;
+    padding: 0;
+    line-height: 1.7;
+}
+
+h1 {
+    font-size: 2.4em;
+    font-weight: 500;
+    color: #333;
+    margin: 20px 0;
+    text-align: center;
+}
+
+#featureType {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 20px auto;
+    max-width: 800px;
+    padding: 20px;
+    background-color: #ddd;
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+#featureType label {
+    margin-right: 25px;
+    font-size: 1.3em;
+    color: #777;
+}
+
+#featureType input[type="checkbox"] {
+    margin-right: 12px;
+}
+
+#map {
+    height: 600px;
+    margin: 20px auto;
+    max-width: 90%;
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Additional styles for alternate pane */

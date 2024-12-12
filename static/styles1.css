@@ -1,0 +1,50 @@
+/* Getty Museum Inspired Style 1 */
+
+body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: #333;
+    background-color: #f9f9f9;
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+}
+
+h1 {
+    font-size: 2.5em;
+    font-weight: 300;
+    color: #222;
+    margin: 20px 0;
+    text-align: center;
+}
+
+#featureType {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 20px auto;
+    max-width: 800px;
+    padding: 10px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+#featureType label {
+    margin-right: 15px;
+    font-size: 1.1em;
+    color: #555;
+}
+
+#featureType input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+#map {
+    height: 600px;
+    margin: 20px auto;
+    max-width: 90%;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Add more styles as needed */

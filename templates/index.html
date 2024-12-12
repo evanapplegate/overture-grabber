@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Collection - Overture Maps Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <style>
+        :root {
+            --primary-color: #9B8E83;
+            --accent-color: #C7B7A3;
+            --background-light: #F9F6F2;
+            --background-lighter: #FFFDFB;
+            --text-color: #695F57;
+            --spacing-unit: 1.4rem;
+            --border-color: #E8E1D9;
+        }
+
+        body {
+            font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+            line-height: 1.2;
+            color: var(--text-color);
+            background-color: var(--background-light);
+            min-height: 100vh;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            letter-spacing: 0.02em;
+            font-size: 0.7em;
+        }
+
+        .header {
+            background: #F9F5F1;
+            color: var(--text-color);
+            padding: calc(var(--spacing-unit) * 0.6) 0;
+            border-bottom: 1px solid var(--border-color);
+            position: relative;
+        }
+
+        .header-content {
+            margin: 0;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+            padding-left: calc(var(--spacing-unit) * 1.5);
+        }
+
+        .header h1 {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            line-height: 1;
+            text-align: left;
+            padding-left: 0.6rem;
+            max-width: 800px;
+        }
+
+        .header h1 a {
+            color: var(--text-color);
+            text-decoration: none;
+            border-bottom: 1px dotted var(--text-color);
+        }
+
+        .header h1 a:hover {
+            border-bottom-style: solid;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            background-color: var(--background-lighter);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.03);
+            margin: calc(var(--spacing-unit) * 1.2);
+            border-radius: 4px;
+            overflow: hidden;
+            height: calc(100vh - 120px);
+        }
+
+        .sidebar {
+            background-color: var(--background-lighter);
+            border-right: 1px solid var(--border-color);
+            padding: calc(var(--spacing-unit) * 1.5);
+            overflow-y: auto;
+        }
+
+        .checkbox-group {
+            display: grid;
+            gap: 0.2rem;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.85rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 2px;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            border: 1px solid transparent;
+            line-height: 1;
+        }
+
+        .checkbox-group label:hover {
+            background-color: rgba(155, 142, 131, 0.03);
+            border-color: var(--border-color);
+            padding-left: 1rem;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            border: 1px solid var(--accent-color);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+            margin: 0;
+        }
+
+        .checkbox-group input[type="checkbox"]:checked {
+            background-color: var(--accent-color);
+        }
+
+        #map {
+            height: 100%;
+            background-color: var(--background-light);
+        }
+
+        .loading-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: var(--primary-color);
+            color: var(--background-lighter);
+            padding: 1rem 2rem;
+            border-radius: 2px;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 0.85rem;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            line-height: 1;
+        }
+
+        .loading-message::before {
+            content: '';
+            width: 16px;
+            height: 16px;
+            border: 1px solid var(--background-lighter);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--background-lighter);
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.7rem;
+            border-top: 1px solid var(--border-color);
+            z-index: 9999;
+        }
+
+        .footer a {
+            color: var(--text-color);
+            text-decoration: none;
+            margin: 0 0.5rem;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                margin: var(--spacing-unit);
+                height: calc(100vh - 100px);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+            }
+
+            .sidebar {
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                padding: var(--spacing-unit);
+                max-height: 300px;
+            }
+
+            .checkbox-group label {
+                padding: 0.4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>Zoom to your area, click the rectangle, drag a box to grab your selected feature type from the <a href="https://overturemaps.org/download/" target="_blank">Overture Maps</a> dataset. It'll take at least ~20 seconds to build your geojsons.</h1>
+        </div>
+    </header>
+
+    <footer class="footer">
+        <a href="https://evanapplegate.com">Tool by Evan Applegate</a> • 
+        <a href="https://github.com/evanapplegate/overture-grabber">Source code on Github</a> • 
+        <a href="https://www.linkedin.com/in/evan-applegate/">Follow me on LinkedIn</a>
+    </footer>
+
+    <main class="main-content">
+        <aside class="sidebar">
+            <div class="feature-type">
+                <div class="checkbox-group">
+                    <label><input type="checkbox" id="locality" value="locality">locality</label>
+                    <label><input type="checkbox" id="locality_area" value="locality_area">locality_area</label>
+                    <label><input type="checkbox" id="administrative_boundary" value="administrative_boundary">administrative_boundary</label>
+                    <label><input type="checkbox" id="building" value="building">building</label>
+                    <label><input type="checkbox" id="building_part" value="building_part">building_part</label>
+                    <label><input type="checkbox" id="division" value="division">division</label>
+                    <label><input type="checkbox" id="division_area" value="division_area">division_area</label>
+                    <label><input type="checkbox" id="place" value="place">place</label>
+                    <label><input type="checkbox" id="segment" value="segment">segment</label>
+                    <label><input type="checkbox" id="connector" value="connector">connector</label>
+                    <label><input type="checkbox" id="infrastructure" value="infrastructure">infrastructure</label>
+                    <label><input type="checkbox" id="land" value="land">land</label>
+                    <label><input type="checkbox" id="land_cover" value="land_cover">land_cover</label>
+                    <label><input type="checkbox" id="land_use" value="land_use">land_use</label>
+                    <label><input type="checkbox" id="water" value="water">water</label>
+                </div>
+            </div>
+        </aside>
+        <div id="map"></div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var map = L.map('map').setView([34.505, -119], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+            }).addTo(map);
+        
+            var drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+        
+            var drawControl = new L.Control.Draw({
+                edit: {
+                    featureGroup: drawnItems
+                },
+                draw: {
+                    polygon: false,
+                    polyline: false,
+                    circle: false,
+                    circlemarker: false,
+                    marker: false,
+                    rectangle: true
+                }
+            });
+            map.addControl(drawControl);
+        
+            map.on(L.Draw.Event.CREATED, function(event) {
+                var layer = event.layer;
+                drawnItems.addLayer(layer);
+                if (event.layerType === 'rectangle') {
+                    var bounds = layer.getBounds();
+                    var bbox = [bounds.getSouthWest().lng, bounds.getSouthWest().lat, bounds.getNorthEast().lng, bounds.getNorthEast().lat];
+                    
+                    var selectedFeatureTypes = [];
+                    document.querySelectorAll('.checkbox-group input[type="checkbox"]:checked').forEach(function(checkbox) {
+                        selectedFeatureTypes.push(checkbox.value);
+                    });
+        
+                    function downloadNextFeatureType(index) {
+                        if (index >= selectedFeatureTypes.length) return;
+                        
+                        var featureType = selectedFeatureTypes[index];
+                        var messageElement = document.createElement('div');
+                        messageElement.className = 'loading-message';
+                        messageElement.textContent = `Creating ${featureType}.geojson...`;
+                        document.body.appendChild(messageElement);
+                        
+                        var payload = JSON.stringify({
+                            bbox: bbox,
+                            type: featureType
+                        });
+        
+                        fetch('/download_geojson', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: payload
+                        })
+                        .then(response => {
+                            if (!response.ok) throw new Error('Network response was not ok');
+                            return response.blob();
+                        })
+                        .then(blob => {
+                            var url = window.URL.createObjectURL(blob);
+                            var a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${featureType}.geojson`;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            document.body.removeChild(messageElement);
+                            downloadNextFeatureType(index + 1);
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            messageElement.textContent = `Error: Could not grab ${featureType}.`;
+                            setTimeout(() => {
+                                document.body.removeChild(messageElement);
+                            }, 3000);
+                            downloadNextFeatureType(index + 1);
+                        });
+                    }
+        
+                    downloadNextFeatureType(0);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
