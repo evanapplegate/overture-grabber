@@ -1,0 +1,12 @@
+{
+  "name": "overture-grabber",
+  "version": "1.0.0",
+  "description": "- Drag a box, get some overture data. - This repo has a lotta garbage, I was trying to run it on Heroku but immediately exceeded my cheapo $7/mo quotas. - Install gunicorn > run `gunicorn --worker-class gevent overture_grabber:app` - Or install Flask > run `python overture_grabber.py`",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
