@@ -147,10 +147,18 @@
             z-index: 1000;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 1rem;
+            gap: 0.5rem;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            line-height: 1;
+            line-height: 1.4;
+            min-width: 300px;
+        }
+
+        .loading-message .progress {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            margin-top: 0.3rem;
         }
 
         .loading-message::before {
@@ -302,7 +310,10 @@
                         
                         var messageElement = document.createElement('div');
                         messageElement.className = 'loading-message';
-                        messageElement.textContent = `Creating ${featureType}.geojson...`;
+                        messageElement.innerHTML = `
+                            <div>Creating ${featureType}.geojson...</div>
+                            <div class="progress">Starting download...</div>
+                        `;
                         document.body.appendChild(messageElement);
                         
                         var payload = JSON.stringify({
@@ -326,9 +337,56 @@
                                 headers: Object.fromEntries(response.headers.entries())
                             });
                             if (!response.ok) throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-                            console.log(`[${new Date().toISOString()}] Starting blob conversion`);
-                            return response.blob();
+                            
+                            // Read the response as a stream of text
+                            const reader = response.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = '';
+                            
+                            return new Response(
+                                new ReadableStream({
+                                    async start(controller) {
+                                        while (true) {
+                                            const {done, value} = await reader.read();
+                                            if (done) break;
+                                            
+                                            // Convert the chunk to text and add to buffer
+                                            buffer += decoder.decode(value, {stream: true});
+                                            
+                                            // Process any complete objects in the buffer
+                                            while (buffer.includes('}')) {
+                                                const objEnd = buffer.indexOf('}') + 1;
+                                                const objText = buffer.substring(0, objEnd);
+                                                buffer = buffer.substring(objEnd);
+                                                
+                                                try {
+                                                    const obj = JSON.parse(objText);
+                                                    if (obj.__progress) {
+                                                        // Update progress display
+                                                        const progressElement = messageElement.querySelector('.progress');
+                                                        progressElement.textContent = `Downloaded ${obj.mb.toFixed(1)}MB, ${obj.features} features...`;
+                                                        continue;
+                                                    }
+                                                } catch (e) {
+                                                    // Not a complete JSON object, ignore
+                                                }
+                                                
+                                                // Pass the chunk to the output stream
+                                                controller.enqueue(new TextEncoder().encode(objText));
+                                            }
+                                        }
+                                        
+                                        // Flush any remaining buffer
+                                        if (buffer) {
+                                            controller.enqueue(new TextEncoder().encode(buffer));
+                                        }
+                                        
+                                        controller.close();
+                                    }
+                                })
+                            );
                         })
+                        .then(response => response.blob())
                         .then(blob => {
                             console.log(`[${new Date().toISOString()}] Received blob:`, {
                                 size: blob.size,
