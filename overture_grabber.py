@@ -1,8 +1,18 @@
 from flask import Flask, request, Response, render_template, jsonify
 import subprocess
 import os
+import sys
+import logging
+from datetime import datetime
 
 app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 
 @app.route('/')
 def index():
@@ -14,57 +24,88 @@ def map_view():
 
 @app.route('/download_geojson', methods=['POST'])
 def download_geojson():
+    request_id = datetime.now().strftime('%Y%m%d-%H%M%S-%f')
+    logging.info(f"[{request_id}] New download request received")
+    
     bbox = request.json.get('bbox')
     feature_type = request.json.get('type', 'place')
-    limit = request.json.get('limit', 1000)  # Default limit of 1000 features
+    
+    logging.info(f"[{request_id}] Parameters: feature_type={feature_type}, bbox={bbox}")
     
     if not bbox or len(bbox) != 4 or not feature_type:
+        logging.error(f"[{request_id}] Invalid input parameters")
         return {"error": "Invalid input"}, 400
 
-    # Prepare the command with size limits
     command = [
         'overturemaps', 'download',
         '--bbox', ','.join(map(str, bbox)),
         '-f', 'geojson',
-        '--type', feature_type,
-        '--limit', str(limit)
+        '--type', feature_type
     ]
+    
+    logging.info(f"[{request_id}] Executing command: {' '.join(command)}")
 
-    # Stream the output with explicit buffer clearing
     def generate():
+        process = None
+        bytes_sent = 0
         try:
+            logging.info(f"[{request_id}] Starting subprocess")
             process = subprocess.Popen(
                 command, 
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.PIPE, 
                 text=True,
-                bufsize=4096  # Set a reasonable buffer size
+                bufsize=4096
             )
             
+            # Handle stderr in a non-blocking way
+            def log_stderr():
+                for line in iter(process.stderr.readline, ''):
+                    logging.error(f"[{request_id}] CLI Error: {line.strip()}")
+            
+            import threading
+            stderr_thread = threading.Thread(target=log_stderr)
+            stderr_thread.daemon = True
+            stderr_thread.start()
+            
+            logging.info(f"[{request_id}] Starting to stream response")
             for line in iter(process.stdout.readline, ''):
+                bytes_sent += len(line)
+                if bytes_sent % 1000000 == 0:  # Log every ~1MB
+                    logging.info(f"[{request_id}] Streamed {bytes_sent/1000000:.1f}MB")
                 yield line
-                
+            
             process.stdout.close()
-            return_code = process.wait(timeout=30)  # Add timeout
+            logging.info(f"[{request_id}] Waiting for process to complete")
+            return_code = process.wait(timeout=30)
+            
             if return_code:
+                error_msg = f"Process failed with return code {return_code}"
+                logging.error(f"[{request_id}] {error_msg}")
                 raise subprocess.CalledProcessError(return_code, command)
+            
+            logging.info(f"[{request_id}] Download completed successfully. Total bytes: {bytes_sent}")
                 
         except Exception as e:
-            app.logger.error(f"Error in download_geojson: {str(e)}")
+            logging.error(f"[{request_id}] Error in download_geojson: {str(e)}", exc_info=True)
             raise
         finally:
             if process:
                 try:
-                    process.kill()  # Ensure process is terminated
-                except:
-                    pass
+                    process.kill()
+                    logging.info(f"[{request_id}] Process cleaned up")
+                except Exception as kill_error:
+                    logging.error(f"[{request_id}] Error killing process: {kill_error}")
 
+    logging.info(f"[{request_id}] Setting up response stream")
     return Response(
         generate(),
         mimetype="application/geo+json",
         headers={
-            'X-Accel-Buffering': 'no',  # Disable nginx buffering
-            'Cache-Control': 'no-cache'  # Prevent caching
+            'X-Accel-Buffering': 'no',
+            'Cache-Control': 'no-cache',
+            'Connection': 'close',
+            'X-Request-ID': request_id
         }
     )
 

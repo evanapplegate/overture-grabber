@@ -297,6 +297,9 @@
                         if (index >= selectedFeatureTypes.length) return;
                         
                         var featureType = selectedFeatureTypes[index];
+                        console.log(`[${new Date().toISOString()}] Starting download for ${featureType}`);
+                        console.log(`[${new Date().toISOString()}] Bounding box:`, bbox);
+                        
                         var messageElement = document.createElement('div');
                         messageElement.className = 'loading-message';
                         messageElement.textContent = `Creating ${featureType}.geojson...`;
@@ -306,6 +309,8 @@
                             bbox: bbox,
                             type: featureType
                         });
+                        
+                        console.log(`[${new Date().toISOString()}] Sending request with payload:`, payload);
         
                         fetch('/download_geojson', {
                             method: 'POST',
@@ -315,22 +320,37 @@
                             body: payload
                         })
                         .then(response => {
-                            if (!response.ok) throw new Error('Network response was not ok');
+                            console.log(`[${new Date().toISOString()}] Received response:`, {
+                                status: response.status,
+                                statusText: response.statusText,
+                                headers: Object.fromEntries(response.headers.entries())
+                            });
+                            if (!response.ok) throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                            console.log(`[${new Date().toISOString()}] Starting blob conversion`);
                             return response.blob();
                         })
                         .then(blob => {
+                            console.log(`[${new Date().toISOString()}] Received blob:`, {
+                                size: blob.size,
+                                type: blob.type
+                            });
                             var url = window.URL.createObjectURL(blob);
+                            console.log(`[${new Date().toISOString()}] Created blob URL:`, url);
                             var a = document.createElement('a');
                             a.href = url;
                             a.download = `${featureType}.geojson`;
                             document.body.appendChild(a);
+                            console.log(`[${new Date().toISOString()}] Triggering download for ${featureType}.geojson`);
                             a.click();
                             a.remove();
                             document.body.removeChild(messageElement);
+                            window.URL.revokeObjectURL(url);
+                            console.log(`[${new Date().toISOString()}] Download complete for ${featureType}`);
                             downloadNextFeatureType(index + 1);
                         })
                         .catch(error => {
-                            console.error('Error:', error);
+                            console.error(`[${new Date().toISOString()}] Error:`, error);
+                            console.error(`[${new Date().toISOString()}] Error stack:`, error.stack);
                             messageElement.textContent = `Error: Could not grab ${featureType}.`;
                             setTimeout(() => {
                                 document.body.removeChild(messageElement);
