@@ -74,7 +74,7 @@ def download_geojson():
             logging.info(f"[{request_id}] Starting to stream response")
             
             # Increased timeout for larger datasets
-            timeout = 120  # 2 minutes
+            timeout = 300  # 5 minutes
             has_data = False
             feature_count = 0
             
