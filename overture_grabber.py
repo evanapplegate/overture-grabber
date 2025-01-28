@@ -69,8 +69,8 @@ def download_geojson():
             
             logging.info(f"[{request_id}] Starting to stream response")
             
-            # 5 minute timeout
-            timeout = 300
+            # long a** timeout
+            timeout = 30000
             start_time = datetime.now()
             
             # Just stream the raw output
