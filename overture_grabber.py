@@ -1,4 +1,4 @@
-from flask import Flask, request, Response, render_template, jsonify
+from flask import Flask, request, Response, render_template, jsonify, send_file
 import subprocess
 import os
 import sys
@@ -27,6 +27,16 @@ def download_geojson():
     request_id = datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     logging.info(f"[{request_id}] New download request received")
     
+    # Check if we're running locally
+    host = request.host.split(':')[0]  # Remove port if present
+    is_local = any([
+        host.startswith('127.'),
+        host.startswith('192.168.'),
+        host.startswith('localhost'),
+        host == 'localhost'
+    ])
+    logging.info(f"[{request_id}] Running on {'local' if is_local else 'remote'} server at {host}")
+    
     bbox = request.json.get('bbox')
     feature_type = request.json.get('type', 'place')
     
@@ -36,81 +46,130 @@ def download_geojson():
         logging.error(f"[{request_id}] Invalid input parameters")
         return {"error": "Invalid input"}, 400
 
-    command = [
-        'overturemaps', 'download',
-        '--bbox', ','.join(map(str, bbox)),
-        '-f', 'geojson',
-        '--type', feature_type
-    ]
-    
-    logging.info(f"[{request_id}] Executing command: {' '.join(command)}")
-
-    def generate():
-        process = None
+    # Create output directory if it doesn't exist
+    output_dir = 'downloads'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        
+    if is_local:
+        # For local server, save to file first
+        output_file = os.path.join(output_dir, f'{feature_type}_{request_id}.geojson')
+        command = [
+            'overturemaps', 'download',
+            '--bbox', ','.join(map(str, bbox)),
+            '-f', 'geojson',
+            '--type', feature_type,
+            '-o', output_file
+        ]
+        
+        logging.info(f"[{request_id}] Executing command: {' '.join(command)}")
+        
         try:
-            logging.info(f"[{request_id}] Starting subprocess")
             process = subprocess.Popen(
-                command, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE, 
-                text=True,
-                bufsize=4096
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
             )
             
-            # Handle stderr in a non-blocking way
-            def log_stderr():
-                for line in iter(process.stderr.readline, ''):
-                    logging.error(f"[{request_id}] CLI Error: {line.strip()}")
+            # Log stderr in real-time
+            while True:
+                stderr_line = process.stderr.readline()
+                if stderr_line == '' and process.poll() is not None:
+                    break
+                if stderr_line:
+                    logging.info(f"[{request_id}] {stderr_line.strip()}")
             
-            import threading
-            stderr_thread = threading.Thread(target=log_stderr)
-            stderr_thread.daemon = True
-            stderr_thread.start()
-            
-            logging.info(f"[{request_id}] Starting to stream response")
-            
-            # long a** timeout
-            timeout = 30000
-            start_time = datetime.now()
-            
-            # Just stream the raw output
-            for line in iter(process.stdout.readline, ''):
-                current_time = datetime.now()
-                if (current_time - start_time).total_seconds() > timeout:
-                    logging.error(f"[{request_id}] Command timed out after {timeout} seconds")
-                    process.kill()
-                    raise TimeoutError(f"Command timed out after {timeout} seconds")
-                yield line
-            
-            process.stdout.close()
-            logging.info(f"[{request_id}] Waiting for process to complete")
             return_code = process.wait()
             
-            if return_code:
-                error_msg = f"Process failed with return code {return_code}"
-                logging.error(f"[{request_id}] {error_msg}")
-                raise subprocess.CalledProcessError(return_code, command)
-            
-            logging.info(f"[{request_id}] Download completed successfully")
+            if return_code != 0:
+                logging.error(f"[{request_id}] Command failed with return code {return_code}")
+                return {"error": "Download failed"}, 500
                 
+            # Send the file
+            return send_file(output_file, as_attachment=True)
+            
         except Exception as e:
-            logging.error(f"[{request_id}] Error in download_geojson: {str(e)}", exc_info=True)
-            raise
-        finally:
-            if process:
-                try:
-                    process.kill()
-                    logging.info(f"[{request_id}] Process cleaned up")
-                except Exception as kill_error:
-                    logging.error(f"[{request_id}] Error killing process: {kill_error}")
+            logging.error(f"[{request_id}] Error during download: {str(e)}")
+            return {"error": str(e)}, 500
+            
+    else:
+        # For remote server, stream directly
+        command = [
+            'overturemaps', 'download',
+            '--bbox', ','.join(map(str, bbox)),
+            '-f', 'geojson',
+            '--type', feature_type
+        ]
+        
+        logging.info(f"[{request_id}] Executing command: {' '.join(command)}")
 
-    logging.info(f"[{request_id}] Setting up response stream")
-    return Response(generate(), mimetype='application/json', headers={
-            'X-Accel-Buffering': 'no',
-            'Cache-Control': 'no-cache',
-            'Connection': 'close',
-            'X-Request-ID': request_id
-        })
+        def generate():
+            process = None
+            try:
+                logging.info(f"[{request_id}] Starting subprocess")
+                process = subprocess.Popen(
+                    command, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE, 
+                    text=True,
+                    bufsize=4096
+                )
+                
+                # Handle stderr in a non-blocking way
+                def log_stderr():
+                    for line in iter(process.stderr.readline, ''):
+                        logging.error(f"[{request_id}] CLI Error: {line.strip()}")
+                
+                import threading
+                stderr_thread = threading.Thread(target=log_stderr)
+                stderr_thread.daemon = True
+                stderr_thread.start()
+                
+                logging.info(f"[{request_id}] Starting to stream response")
+                
+                # long a** timeout
+                timeout = 30000
+                start_time = datetime.now()
+                
+                # Just stream the raw output
+                for line in iter(process.stdout.readline, ''):
+                    current_time = datetime.now()
+                    if (current_time - start_time).total_seconds() > timeout:
+                        logging.error(f"[{request_id}] Command timed out after {timeout} seconds")
+                        process.kill()
+                        raise TimeoutError(f"Command timed out after {timeout} seconds")
+                    yield line
+                
+                process.stdout.close()
+                logging.info(f"[{request_id}] Waiting for process to complete")
+                return_code = process.wait()
+                
+                if return_code:
+                    error_msg = f"Process failed with return code {return_code}"
+                    logging.error(f"[{request_id}] {error_msg}")
+                    raise subprocess.CalledProcessError(return_code, command)
+                
+                logging.info(f"[{request_id}] Download completed successfully")
+                    
+            except Exception as e:
+                logging.error(f"[{request_id}] Error in download_geojson: {str(e)}", exc_info=True)
+                raise
+            finally:
+                if process:
+                    try:
+                        process.kill()
+                        logging.info(f"[{request_id}] Process cleaned up")
+                    except Exception as kill_error:
+                        logging.error(f"[{request_id}] Error killing process: {kill_error}")
+
+        logging.info(f"[{request_id}] Setting up response stream")
+        return Response(generate(), mimetype='application/json', headers={
+                'X-Accel-Buffering': 'no',
+                'Cache-Control': 'no-cache',
+                'Connection': 'close',
+                'X-Request-ID': request_id
+            })
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
